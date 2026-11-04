@@ -52,7 +52,7 @@
     courses: [], courseMap: new Map(), dataset: null, source: null,
     selection: new Map(), checked: new Set(),
     filters: emptyFilters(), page: 1, pageSize: DEFAULT_PAGE_SIZE, showAdded: false,
-    view: 'catalog', loading: true, loadStatus: null, error: null,
+    view: 'catalog', loading: true, loadStatus: null, error: null, refreshing: false, refreshFailure: null, via: null,
     conditions: emptyConditions(), resultConditions: emptyConditions(), revision: 0, resultRevision: -1,
     candidates: [], activeCandidate: 0, generated: false, generating: false, generationWarnings: [], truncated: false, resultCourseMap: new Map(),
     resultEngine: null, resultMeta: null, generatingEngine: null, generateStatus: null, semesters: [], semesterChoice: null,
@@ -876,9 +876,41 @@
     if (live) return `서버 ${new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(date)} 기준`;
     return `저장본 ${new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date)} 기준`;
   }
+  // 담은 과목의 분반·교수·시간을 한 줄로 요약합니다. 목록을 바꿔 끼운 뒤 실제로 달라졌을 때만 "조건이 바뀌었어요"를 띄우기 위해 씁니다.
+  function selectionSignature() {
+    return [...state.selection.keys()].map(id => {
+      const course = getCourse(id);
+      return course ? `${id}=${course.sections.map(section => `${section.id}@${section.professor || ''}@${section.meetings.map(meeting => `${meeting.day}${meeting.start}-${meeting.end}`).join(',')}`).join('|')}` : `${id}=gone`;
+    }).join(';');
+  }
+  // 오른쪽 위 목록 출처 표시. 뒤에서 서버 목록을 받는 동안에는 "서버 확인 중"·"서버 깨우는 중"을, 실패하면 "서버 연결 실패"를 덧붙입니다.
+  function renderDatasetLabel() {
+    const label = $('dataset-label');
+    const live = state.source === 'live';
+    let text = live ? `서버 강의 목록${state.via === 'proxy' ? ' (로컬 중계)' : ''}` : '저장된 강의 목록';
+    if (state.refreshing) text += state.loadStatus && state.loadStatus.phase === 'waking' ? ' · 서버 깨우는 중' : ' · 서버 확인 중';
+    else if (state.refreshFailure) text += ' · 서버 연결 실패';
+    label.textContent = text;
+    label.classList.toggle('is-live', live);
+  }
+  function renderRefreshNotice() {
+    const box = $('source-notice');
+    const current = state.source === 'live' ? '서버' : '저장된';
+    if (state.refreshing) {
+      const waking = state.loadStatus && state.loadStatus.phase === 'waking';
+      box.hidden = false;
+      box.textContent = waking
+        ? `잠든 서버를 깨우는 중이에요. 1분 정도 걸릴 수 있어요. 지금 보이는 ${current} 목록은 그대로 쓸 수 있어요.`
+        : `서버에서 최신 강의 목록을 받는 중이에요. 지금 보이는 ${current} 목록은 그대로 쓸 수 있어요.`;
+    } else if (state.refreshFailure) {
+      box.hidden = false;
+      box.textContent = `서버 강의 목록을 받지 못했어요. (${state.refreshFailure}) 지금 보이는 ${current} 목록을 그대로 쓰고, 새로고침 단추로 다시 시도할 수 있어요.`;
+    }
+  }
   function applyCatalog(result) {
     const hadDataset = Boolean(state.dataset);
     const previous = hadDataset ? selectedStatus() : saved?.selection;
+    const before = hadDataset ? selectionSignature() : null;
     state.courses = result.courses;
     state.courseMap = new Map(state.courses.map(course => [course.id, course]));
     state.dataset = result.dataset;
@@ -894,7 +926,7 @@
     if (saved && !state.generated && state.revision === 0) state.conditions = sanitizeConditions(saved.conditions);
     saved = null;
     state.checked.clear();
-    if (hadDataset) state.revision += 1;
+    if (hadDataset && (removed || selectionSignature() !== before)) state.revision += 1;
     populateFilters();
     const year = result.dataset.year || '—';
     const term = result.dataset.semester || '—';
@@ -903,13 +935,15 @@
     if (Number.isInteger(result.dataset.year) && Number.isInteger(result.dataset.semester)) state.semesterChoice = { year: result.dataset.year, semester: result.dataset.semester };
     $('semester-heading').textContent = `${year}학년도 ${term}학기`;
     renderSemesterSelect();
-    $('dataset-label').textContent = live ? `서버 강의 목록${result.via === 'proxy' ? ' (로컬 중계)' : ''}` : '저장된 강의 목록';
-    $('dataset-label').classList.toggle('is-live', live);
+    state.via = result.via || null;
+    state.refreshFailure = null;
+    renderDatasetLabel();
     $('source-footer').innerHTML = `<b>${esc(year)}년 ${esc(term)}학기</b> 개설강좌 ${result.dataset.sectionCount.toLocaleString()}분반 · ${state.courses.length.toLocaleString()}과목 · ${esc(formatStamp(result.fetchedAt, live))}`;
     $('source-notice').hidden = !result.notice;
     $('source-notice').textContent = result.notice || '';
     if (removed) toast(`현재 자료에 없는 ${removed}개 과목을 선택 목록에서 뺐어요.`);
     save();
+    return removed;
   }
   // 서버가 학기를 2개 이상 제공할 때만 선택 목록을 보여줍니다. 하나뿐이면 학기 표시만 둡니다.
   function renderSemesterSelect() {
@@ -921,35 +955,59 @@
     select.hidden = false;
     $('semester-heading').hidden = true;
   }
+  // background: 목록이 이미 있으면(저장본이든 서버 목록이든) 가리지 않고 뒤에서 서버 목록을 받아 바꿔 끼웁니다.
+  // 실패해도 지금 목록을 그대로 두고 사유만 표시합니다. 학기 변경과 저장본 전환은 예전처럼 목록을 가리고 받습니다.
   async function loadCatalog(options = {}) {
     loadController?.abort();
     loadController = new AbortController();
     const controller = loadController;
-    state.loading = true;
+    const background = options.background === true && Boolean(state.dataset) && !options.source && !options.semester;
     state.error = null;
     state.loadStatus = null;
-    renderCatalog();
-    renderSelection();
+    state.refreshing = background;
+    state.refreshFailure = null;
+    if (background) {
+      renderDatasetLabel();
+      renderRefreshNotice();
+    } else {
+      state.loading = true;
+      renderCatalog();
+      renderSelection();
+      $('dataset-label').textContent = '강의 목록 불러오는 중';
+      $('dataset-label').classList.remove('is-live');
+    }
     $('reload-catalog').disabled = true;
     $('semester-select').disabled = true;
-    $('dataset-label').textContent = '강의 목록 불러오는 중';
-    $('dataset-label').classList.remove('is-live');
     try {
       const result = await window.CatalogAPI.load({
-        source: options.source || 'auto',
+        source: options.source || (background ? 'live' : 'auto'),
         semester: options.semester || state.semesterChoice,
         signal: controller.signal,
-        onStatus: status => { if (controller !== loadController) return; state.loadStatus = status; renderCatalogState(); }
+        onStatus: status => {
+          if (controller !== loadController) return;
+          state.loadStatus = status;
+          if (background) { renderDatasetLabel(); renderRefreshNotice(); } else renderCatalogState();
+        }
       });
       if (controller !== loadController) return;
-      applyCatalog(result);
+      state.refreshing = false;
+      const removed = applyCatalog(result);
+      if (background && result.source === 'live' && !removed) toast('서버 강의 목록으로 갱신했어요.');
     } catch (error) {
       if (error.name === 'AbortError') return;
-      state.error = error.message || '잠시 후 다시 시도해주세요.';
-      $('dataset-label').textContent = '강의 목록 연결 실패';
+      if (background) {
+        state.refreshing = false;
+        state.refreshFailure = error.message || '연결 실패';
+        renderDatasetLabel();
+        renderRefreshNotice();
+      } else {
+        state.error = error.message || '잠시 후 다시 시도해주세요.';
+        $('dataset-label').textContent = '강의 목록 연결 실패';
+      }
     } finally {
       if (controller === loadController) {
         state.loading = false;
+        state.refreshing = false;
         state.loadStatus = null;
         $('reload-catalog').disabled = false;
         $('semester-select').disabled = false;
@@ -958,6 +1016,25 @@
         renderResults();
       }
     }
+  }
+  // 열자마자 동봉 저장본을 보여주고, 동시에 서버 목록을 뒤에서 받아 조용히 바꿔 끼웁니다.
+  // 서버는 처음부터 깨우되 사용자가 기다리지 않게 하는 것입니다. 파일로 열었거나 저장본이 없으면 예전처럼 서버 먼저 시도합니다.
+  async function bootCatalog() {
+    const protocol = window.location.protocol;
+    const online = protocol === 'http:' || protocol === 'https:';
+    if (!online || !window.PKNU_CATALOG) { loadCatalog(); return; }
+    try {
+      const first = await window.CatalogAPI.load({ source: 'snapshot' });
+      state.loading = false;
+      applyCatalog(first);
+      renderCatalog();
+      renderSelection();
+      renderResults();
+    } catch (_) {
+      loadCatalog();
+      return;
+    }
+    loadCatalog({ background: true });
   }
 
   // ---------- 초기화와 이벤트 ----------
@@ -978,7 +1055,7 @@
   $('catalog-tab').addEventListener('click', () => setView('catalog'));
   $('timetable-tab').addEventListener('click', () => setView('timetable'));
   $('back-to-courses').addEventListener('click', () => setView('catalog'));
-  $('reload-catalog').addEventListener('click', () => loadCatalog());
+  $('reload-catalog').addEventListener('click', () => loadCatalog({ background: true }));
   $('load-example').addEventListener('click', seedExample);
   $('generate').addEventListener('click', () => generate());
   $('regenerate-inline').addEventListener('click', () => generate());
@@ -1090,5 +1167,5 @@
   renderChat();
   renderSelection();
   renderResults();
-  loadCatalog();
+  bootCatalog();
 })();
