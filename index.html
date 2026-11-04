@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="국립부경대학교 강의 목록에서 과목을 고르고 시간표 후보를 비교하는 PC용 수강 플래너">
+  <title>국립부경대학교 · 수강 플래너</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="국립부경대학교 수강 플래너 홈"><img class="brand-logo" src="assets/pknu-logo-color.png" alt="국립부경대학교 PUKYONG NATIONAL UNIVERSITY"></a>
+    <h1 class="app-title">수강 플래너</h1>
+    <div class="topbar-right">
+      <select class="semester-select" id="semester-select" aria-label="학기 선택" title="학기 선택" hidden></select>
+      <span class="semester-pill" id="semester-heading">2026학년도 2학기</span>
+      <span class="dataset-label" id="dataset-label">강의 목록 불러오는 중</span>
+      <button class="icon-button" id="reload-catalog" aria-label="강의 목록 새로고침" title="강의 목록 새로고침"></button>
+    </div>
+  </header>
+  <div class="infobar">
+    <span id="source-footer">강의 목록을 확인하고 있어요.</span>
+    <span id="selection-brief">담은 과목 없음</span>
+    <span class="infobar-right">선택과 조건은 이 브라우저에 자동 저장돼요.</span>
+  </div>
+  <nav class="view-tabs" aria-label="작업 화면">
+    <button class="active" id="catalog-tab" aria-controls="catalog-view" aria-pressed="true">과목 선택</button>
+    <button id="timetable-tab" aria-controls="timetable-view" aria-pressed="false">시간표 후보 <span class="tab-count" id="candidate-count">0</span><span class="tab-dot" id="stale-dot" hidden title="조건이 바뀌어 후보를 다시 만들어야 해요"></span></button>
+  </nav>
+  <div class="source-notice" id="source-notice" role="status" hidden></div>
+  <main class="workspace" id="workspace">
+    <section class="card main-card" aria-label="과목 목록과 시간표">
+      <div id="catalog-view" class="view-content">
+        <div class="card-head">
+          <div class="tile tile-blue" id="catalog-tile" aria-hidden="true"></div>
+          <div class="card-head-text"><h2>전체 과목 <span class="quiet-count" id="total-course-count">—</span></h2><p class="card-sub" id="catalog-description">과목 단위로 담고, 분반은 나중에 정할 수 있어요.</p></div>
+          <div class="card-head-right">
+            <label class="switch" title="담은 과목은 기본으로 목록에서 숨겨요"><input type="checkbox" id="show-added"><span class="switch-track" aria-hidden="true"></span><span>담은 과목도 보기</span></label>
+            <button class="text-button" id="load-example">예시 과목 담기</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label class="search-field"><span id="search-icon" aria-hidden="true"></span><input id="course-search" type="search" placeholder="과목명 · 학수번호 · 교수 검색" aria-label="과목 검색" autocomplete="off"></label>
+          <div class="filter-row" aria-label="과목 필터"><div id="category-filter"></div><div id="mode-filter"></div><div id="department-filter"></div><div id="credits-filter"></div><div id="grade-filter"></div><button class="text-button" id="reset-filters" hidden>필터 초기화</button></div>
+          <div class="active-filters" id="active-filters" aria-live="polite" hidden></div>
+        </div>
+        <div class="catalog-state" id="catalog-state" role="status"><span class="spinner"></span><strong>강의 목록을 불러오고 있어요.</strong></div>
+        <div class="table-scroll" id="catalog-table-wrap" hidden>
+          <table class="course-table">
+            <thead><tr><th class="check-column"><input id="check-page" type="checkbox" aria-label="현재 페이지 과목 모두 선택"></th><th>과목</th><th>구분</th><th>학점·방식</th><th>학년</th><th>담당교수</th><th class="col-sections">분반</th><th class="add-column"><span class="sr-only">과목 담기</span></th></tr></thead>
+            <tbody id="course-rows"></tbody>
+          </table>
+        </div>
+        <div class="catalog-footer">
+          <div class="page-size" role="group" aria-label="페이지당 과목 수"><span class="page-size-label">페이지당</span><div class="page-size-options" id="page-size-options"></div><input id="page-size-input" type="number" min="1" max="500" step="1" placeholder="직접 입력" aria-label="페이지당 과목 수 직접 입력"></div>
+          <div class="pagination"><button class="icon-button" id="previous-page" aria-label="이전 페이지"></button><span id="page-indicator">—</span><button class="icon-button" id="next-page" aria-label="다음 페이지"></button></div>
+          <button class="button primary" id="batch-add" disabled>선택한 과목 담기</button>
+        </div>
+      </div>
+      <div id="timetable-view" class="view-content" hidden>
+        <div class="card-head">
+          <div class="tile tile-navy" id="timetable-tile" aria-hidden="true"></div>
+          <div class="card-head-text"><h2>시간표 후보 <span class="subtle-tag" id="engine-tag">서버 계산</span></h2><p class="card-sub" id="result-summary">선택한 과목으로 이번 학기의 모양을 확인해보세요.</p></div>
+          <div class="card-head-right">
+            <button class="button secondary small" id="export-png" disabled>이미지 저장</button>
+            <button class="button secondary small" id="export-pdf" disabled>인쇄 · PDF</button>
+            <button class="text-button" id="back-to-courses">과목 더 담기</button>
+          </div>
+        </div>
+        <div class="stale-notice" id="stale-notice" role="status" hidden><span><strong>조건이 바뀌었어요.</strong> 아래는 이전 조건으로 만든 결과예요.</span><button class="button primary small" id="regenerate-inline">후보 다시 만들기</button></div>
+        <div class="candidate-tabs" id="candidate-tabs" aria-label="시간표 후보 선택"></div>
+        <div id="calendar-empty" class="calendar-empty"><div class="empty-symbol" id="calendar-empty-icon"></div><h3>아직 그려진 시간표가 없어요.</h3><p>관심 있는 과목을 담고<br>‘시간표 후보 만들기’를 눌러보세요.</p><button class="button secondary" id="empty-browse">과목 살펴보기</button></div>
+        <div class="calendar-scroll" id="calendar-scroll" hidden><div class="calendar" id="calendar"></div></div>
+        <div class="calendar-footer" id="calendar-footer" hidden><span>수업을 누르면 분반 정보를 볼 수 있어요.</span><span id="calendar-range"></span></div>
+        <details class="reasons" id="reasons" hidden><summary><span id="reasons-title">제외된 분반과 이유</span><span class="reasons-count" id="reasons-count"></span></summary><ul class="reasons-list" id="reasons-list"></ul></details>
+      </div>
+    </section>
+
+    <aside class="card selection-card" id="selection-pane" aria-label="선택한 과목과 조건">
+      <button class="collapsed-rail" id="expand-selection" hidden aria-label="선택 과목 패널 펼치기"><span id="selection-rail-icon"></span><span>선택 과목</span><span class="rail-count" id="selection-rail-count">0</span></button>
+      <div class="selection-content" id="selection-content">
+        <div class="card-head compact">
+          <div class="tile tile-teal" id="selection-tile" aria-hidden="true"></div>
+          <div class="card-head-text"><h2>선택한 과목 <span class="quiet-count" id="selected-count">0</span></h2><p class="card-sub" id="selection-summary">아직 담은 과목이 없어요.</p></div>
+          <button class="icon-button" id="collapse-selection" aria-label="선택 과목 패널 접기"></button>
+        </div>
+        <div class="selected-list" id="selected-list"></div>
+        <div class="selection-bottom">
+          <div class="cond-box">
+            <div class="cond-title"><h3>나에게 맞는 시간표 조건</h3><button class="text-button" id="edit-conditions">편집</button></div>
+            <div class="condition-summary" id="condition-summary"></div>
+            <div class="stale-inline" id="selection-stale" role="status" hidden>조건이 바뀌었어요. 후보를 다시 만들어야 반영돼요.</div>
+          </div>
+          <button class="button primary generate-button" id="generate" disabled>시간표 후보 만들기</button>
+          <p class="preview-note" id="generate-note">백엔드 서버가 후보를 계산해요.</p>
+        </div>
+      </div>
+    </aside>
+
+    <aside class="card chat-card" id="chat-pane" aria-label="AI 도우미">
+      <button class="collapsed-rail" id="expand-chat" hidden aria-label="AI 도우미 패널 펼치기"><span id="chat-rail-icon"></span><span>AI 도우미</span><span class="rail-dot"></span></button>
+      <div class="chat-content" id="chat-content">
+        <div class="card-head compact">
+          <div class="tile tile-purple" id="chat-tile" aria-hidden="true"></div>
+          <div class="card-head-text"><h2>AI 도우미</h2><p class="card-sub">조건을 말로 바꿔 보세요.</p></div>
+          <button class="icon-button" id="collapse-chat" aria-label="AI 도우미 패널 접기"></button>
+        </div>
+        <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
+        <div class="chat-suggestions" id="chat-suggestions"><button data-prompt="목요일 오전은 비워줘">목요일 오전은 비워줘</button><button data-prompt="금요일은 공강으로 해줘">금요일은 공강으로</button><button data-prompt="18학점으로 맞춰줘">18학점으로 맞춰줘</button></div>
+        <form class="chat-form" id="chat-form"><label class="sr-only" for="chat-input">AI 도우미에게 요청</label><textarea id="chat-input" rows="1" placeholder="메시지를 입력하세요" maxlength="400"></textarea><button type="submit" class="chat-send" id="chat-send">보내기</button></form>
+        <p class="chat-status" id="chat-status" role="status"></p>
+      </div>
+    </aside>
+  </main>
+  <footer class="app-footer"><span id="app-footer-left">국립부경대학교 수강 플래너 · 캡스톤 디자인</span><span>PC·노트북 브라우저 기준</span></footer>
+
+  <div class="section-popover" id="section-popover" role="dialog" aria-labelledby="section-popover-title" hidden></div>
+
+  <dialog class="modal conditions-modal" id="conditions-dialog" aria-labelledby="conditions-title">
+    <form id="conditions-form">
+      <div class="modal-heading"><div><span class="eyebrow">나에게 맞는 한 학기</span><h2 id="conditions-title">시간표 조건</h2></div><button type="button" class="icon-button" data-close-dialog="conditions-dialog" aria-label="조건 편집 닫기">×</button></div>
+      <div class="modal-body">
+        <section class="cond-section">
+          <h3>목표</h3>
+          <div class="cond-grid">
+            <label class="input-field"><span>목표 학점</span><input id="condition-credits" type="number" min="1" max="40" step="1" placeholder="제한 없음"><small>입력한 학점과 정확히 맞춰요.</small></label>
+            <label class="input-field"><span>과목 수</span><input id="condition-count" type="number" min="1" max="15" step="1" placeholder="제한 없음"><small>입력한 과목 수와 정확히 맞춰요.</small></label>
+          </div>
+        </section>
+        <section class="cond-section">
+          <h3>공강으로 비울 요일</h3>
+          <div class="day-choices" id="free-day-choices"></div>
+        </section>
+        <section class="cond-section">
+          <h3>수업을 피하고 싶은 시간</h3>
+          <div class="blocked-card">
+            <div class="blocked-inputs">
+              <label class="sr-only" for="blocked-day">요일</label><select id="blocked-day"><option>월</option><option>화</option><option>수</option><option>목</option><option>금</option><option>토</option><option>일</option></select>
+              <label class="sr-only" for="blocked-start">시작 시각</label><input id="blocked-start" type="time" value="09:00">
+              <span class="blocked-dash">–</span>
+              <label class="sr-only" for="blocked-end">종료 시각</label><input id="blocked-end" type="time" value="12:00">
+              <button type="button" class="button secondary" id="add-blocked">추가</button>
+            </div>
+            <p id="blocked-error" class="field-error" role="alert" hidden></p>
+            <table class="blocked-table" id="blocked-table" hidden><thead><tr><th>요일</th><th>시작</th><th>종료</th><th class="blocked-remove-col"><span class="sr-only">삭제</span></th></tr></thead><tbody id="blocked-list"></tbody></table>
+            <p class="empty-blocked" id="blocked-empty">등록한 제외 시간이 없어요.</p>
+          </div>
+        </section>
+      </div>
+      <div class="modal-footer"><button type="button" class="text-button" id="reset-conditions">조건 초기화</button><div><button type="button" class="button secondary" data-close-dialog="conditions-dialog">취소</button><button type="submit" class="button primary">적용</button></div></div>
+    </form>
+  </dialog>
+  <dialog class="modal detail-modal" id="detail-dialog" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="data/catalog-snapshot.js"></script>
+  <script src="catalog.js"></script>
+  <script src="filters.js"></script>
+  <script src="preview-engine.js"></script>
+  <script src="chat.js"></script>
+  <script src="timetable-api.js"></script>
+  <script src="export.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
