@@ -8,7 +8,7 @@ window.PKNU_CONFIG = {
   devProxyBase: '/api',
 
   // AI 챗봇(서비스 A). 빈 값이면 화면을 제공하는 같은 주소의 chatPath 를 호출합니다.
-  chatBase: '',
+  chatBase: 'https://pknu-chat.onrender.com',
   chatPath: '/api/chat',
 
   // Render 무료 플랜은 잠든 서버가 깨어나는 데 1분 안팎이 걸립니다.
