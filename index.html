@@ -123,7 +123,7 @@
         <section class="cond-section">
           <h3>목표</h3>
           <div class="cond-grid">
-            <label class="input-field"><span>목표 학점</span><input id="condition-credits" type="number" min="1" max="40" step="1" placeholder="제한 없음"><small>입력한 학점과 정확히 맞춰요.</small></label>
+            <label class="input-field"><span>목표 학점</span><div class="range-inputs"><input id="condition-credits" type="number" min="1" max="40" step="1" placeholder="최소" aria-label="최소 학점"><span class="range-sep" aria-hidden="true">~</span><input id="condition-credits-max" type="number" min="1" max="40" step="1" placeholder="최대" aria-label="최대 학점"></div><small>예: 16~21. 최소만 쓰면 그 학점 이상, 최대만 쓰면 이하, 둘이 같으면 정확히 그 학점.</small></label>
             <label class="input-field"><span>과목 수</span><input id="condition-count" type="number" min="1" max="15" step="1" placeholder="제한 없음"><small>입력한 과목 수와 정확히 맞춰요.</small></label>
           </div>
         </section>

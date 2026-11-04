@@ -90,7 +90,7 @@
     const cfg = window.PKNU_CONFIG || {};
     return cfg.generateMode !== 'browser' && window.TimetableAPI.available() ? 'server' : 'browser';
   }
-  const ENGINE_LABELS = { server: '서버 계산', browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패' };
+  const ENGINE_LABELS = { server: '서버 계산', browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패', 'browser-limit': '화면 계산 · 과목 수 초과' };
   function toast(message) {
     clearTimeout(toastTimer);
     $('toast').textContent = message;
@@ -102,10 +102,33 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ datasetId: state.dataset?.id, selection: selectedStatus(), conditions: state.conditions, ui: { showAdded: state.showAdded, pageSize: state.pageSize, semester: state.semesterChoice } }));
     } catch (_) {}
   }
+  // 목표 학점은 범위 {min, max} 입니다. 정수 하나(18)는 min=max, 한쪽만 있으면 "이상"/"이하".
+  // 챗봇 응답은 정수 credits 또는 credits_min/credits_max(creditsMin/creditsMax)를 모두 받습니다.
+  function sanitizeCreditRange(value, source) {
+    const bound = raw => {
+      const number = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+      return Number.isInteger(number) && number > 0 && number <= 40 ? number : null;
+    };
+    let min = null;
+    let max = null;
+    if (value && typeof value === 'object') { min = bound(value.min); max = bound(value.max); }
+    else if (value !== null && value !== undefined) { min = bound(value); max = min; }
+    if (source && typeof source === 'object') {
+      const altMin = bound(source.credits_min !== undefined ? source.credits_min : source.creditsMin);
+      const altMax = bound(source.credits_max !== undefined ? source.credits_max : source.creditsMax);
+      if (altMin !== null || altMax !== null) { min = altMin; max = altMax; }
+    }
+    if (min === null && max === null) return null;
+    if (min !== null && max !== null && min > max) [min, max] = [max, min];
+    return { min, max };
+  }
+  const creditsLabel = range => !range ? null
+    : range.min !== null && range.max !== null ? (range.min === range.max ? `${range.min}학점` : `${range.min}~${range.max}학점`)
+      : range.min !== null ? `${range.min}학점 이상` : `${range.max}학점 이하`;
   function sanitizeConditions(value) {
     const result = emptyConditions();
     if (!value || typeof value !== 'object') return result;
-    if (Number.isInteger(value.credits) && value.credits > 0 && value.credits <= 40) result.credits = value.credits;
+    result.credits = sanitizeCreditRange(value.credits, value);
     if (Number.isInteger(value.count) && value.count > 0 && value.count <= 15) result.count = value.count;
     if (Array.isArray(value.freeDays)) result.freeDays = [...new Set(value.freeDays.filter(day => DAYS.includes(day)))];
     if (Array.isArray(value.blockedTimes)) {
@@ -204,11 +227,21 @@
   }
 
   // ---------- 전체 과목 ----------
-  function matchesFilters(course) {
+  // 필터는 분반 단위로 봅니다. 검색어는 과목명·학수번호에 맞으면 분반 전체, 아니면 교수 이름이 맞는 분반만 남깁니다.
+  function sectionMatches(course, section) {
     const q = state.filters.q.trim().toLocaleLowerCase();
     const courseMatches = !q || `${course.name} ${course.code}`.toLocaleLowerCase().includes(q);
-    return course.sections.some(section => (courseMatches || (section.professor || '').toLocaleLowerCase().includes(q))
-      && FILTER_FIELDS.every(key => !state.filters[key].length || state.filters[key].includes(filterValue(section, key))));
+    return (courseMatches || (section.professor || '').toLocaleLowerCase().includes(q))
+      && FILTER_FIELDS.every(key => !state.filters[key].length || state.filters[key].includes(filterValue(section, key)));
+  }
+  // 같은 학수번호를 여러 학과가 개설한 과목은 필터에 맞는 분반만 행에 보여주고, 담을 때도 그 분반만 허용합니다(분반 창에서 바꿀 수 있음).
+  const matchingSections = course => hasFilters() ? course.sections.filter(section => sectionMatches(course, section)) : course.sections;
+  function filteredAllowedIds(course) {
+    const visible = matchingSections(course);
+    return visible.length && visible.length < course.sections.length ? visible.map(section => section.id) : null;
+  }
+  function matchesFilters(course) {
+    return course.sections.some(section => sectionMatches(course, section));
   }
   const filteredCourses = () => state.courses.filter(course => (state.showAdded || !state.selection.has(course.id)) && matchesFilters(course));
   const hiddenAddedCount = () => state.showAdded ? 0 : state.courses.filter(course => state.selection.has(course.id) && matchesFilters(course)).length;
@@ -271,25 +304,31 @@
   }
   function courseRow(course) {
     const added = state.selection.has(course.id);
-    const categories = uniqueText(course.sections.map(section => section.categoryRaw || UNKNOWN));
-    const modes = uniqueText(course.sections.map(section => section.modeRaw || UNKNOWN));
-    const grades = uniqueText(course.sections.map(section => gradeKey(section.grade))).sort((a, b) => gradeRank(a) - gradeRank(b));
+    const visible = matchingSections(course);
+    const narrowed = visible.length < course.sections.length;
+    const categories = uniqueText(visible.map(section => section.categoryRaw || UNKNOWN));
+    const modes = uniqueText(visible.map(section => section.modeRaw || UNKNOWN));
+    const grades = uniqueText(visible.map(section => gradeKey(section.grade))).sort((a, b) => gradeRank(a) - gradeRank(b));
     const gradeHtml = grades.map(value => value === UNKNOWN ? '<span class="grade-unknown" title="학년 정보가 없는 분반이 있어요.">미확인</span>' : esc(gradeLabelOf(value))).join(' · ');
-    const professors = uniqueText(course.sections.map(section => section.professor));
-    const unknownProfessor = course.sections.some(section => !section.professor);
+    const professors = uniqueText(visible.map(section => section.professor));
+    const unknownProfessor = visible.some(section => !section.professor);
+    const creditRange = rangeCredits(visible);
+    const creditLabelText = creditRange ? (creditRange[0] === creditRange[1] ? String(creditRange[0]) : `${creditRange[0]}–${creditRange[1]}`) : UNKNOWN;
+    const sectionNote = narrowed ? `분반 ${visible.length}개 (전체 ${course.sections.length}개)` : `분반 ${course.sections.length}개`;
     const professorHtml = professors.length
       ? `<span class="professor-list">${professors.slice(0, 2).map(professor => `<span>${esc(professor)}</span>`).join('')}${professors.length > 2 ? `<button class="professor-more" data-detail-course="${esc(course.id)}" aria-label="${esc(course.name)} 담당교수 전체 보기">외 ${professors.length - 2}명 보기</button>` : ''}${unknownProfessor ? '<span class="professor-unknown">미확인 포함</span>' : ''}</span>`
       : '<span class="professor-unknown">미확인</span>';
-    const departments = course.departments.length ? course.departments.slice(0, 2).join(' · ') + (course.departments.length > 2 ? ` 외 ${course.departments.length - 2}개 학과` : '') : '개설학과 미확인';
-    const unknownTime = course.sections.every(section => section.timeStatus !== 'KNOWN');
+    const departmentList = uniqueText(visible.map(section => section.department)).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    const departments = departmentList.length ? departmentList.slice(0, 2).join(' · ') + (departmentList.length > 2 ? ` 외 ${departmentList.length - 2}개 학과` : '') : '개설학과 미확인';
+    const unknownTime = visible.every(section => section.timeStatus !== 'KNOWN');
     return `<tr class="course-row ${added ? 'is-added' : ''}" data-course-row="${esc(course.id)}">
       <td class="check-column"><input type="checkbox" data-check-course="${esc(course.id)}" aria-label="${esc(course.name)} 선택" ${added ? 'disabled' : ''} ${state.checked.has(course.id) ? 'checked' : ''}></td>
-      <td class="course-cell"><button class="course-name" data-detail-course="${esc(course.id)}">${esc(course.name)}</button><span class="course-sub" title="${esc(course.departments.join(' · '))}">${esc(course.code)} · ${esc(departments)} · 분반 ${course.sections.length}개</span>${unknownTime ? '<span class="time-unresolved">수업시간 미확인</span>' : ''}</td>
+      <td class="course-cell"><button class="course-name" data-detail-course="${esc(course.id)}">${esc(course.name)}</button><span class="course-sub" title="${esc(departmentList.join(' · '))}">${esc(course.code)} · ${esc(departments)} · ${esc(sectionNote)}</span>${unknownTime ? '<span class="time-unresolved">수업시간 미확인</span>' : ''}</td>
       <td class="nw">${categories.map(category => `<span class="tag ${tagClass(category)}">${esc(category)}</span>`).join('')}</td>
-      <td class="nw credit-cell"><span class="credit-text">${esc(creditText(course))}</span><span class="mode-text">${esc(modes.join('·'))}</span></td>
+      <td class="nw credit-cell"><span class="credit-text">${esc(creditLabelText)}</span><span class="mode-text">${esc(modes.join('·'))}</span></td>
       <td class="nw">${gradeHtml}</td>
       <td class="professor-cell">${professorHtml}</td>
-      <td class="nw col-sections"><button class="section-count" data-sections-course="${esc(course.id)}" aria-label="${esc(course.name)} 분반 설정">${course.sections.length}개 <span aria-hidden="true">▾</span></button></td>
+      <td class="nw col-sections"><button class="section-count ${narrowed ? 'is-narrowed' : ''}" data-sections-course="${esc(course.id)}" aria-label="${esc(course.name)} 분반 설정${narrowed ? ` (필터에 맞는 ${visible.length}개, 전체 ${course.sections.length}개)` : ''}"${narrowed ? ` title="필터에 맞는 분반 ${visible.length}개 · 전체 ${course.sections.length}개"` : ''}><span>${visible.length}개${narrowed ? `<span class="section-total">/${course.sections.length}</span>` : ''}</span> <span aria-hidden="true">▾</span></button></td>
       <td class="add-column">${added ? `<span class="added-mark">${icon('check', 15)} 담음</span>` : `<button class="add-course" data-add-course="${esc(course.id)}" aria-label="${esc(course.name)} 담기">담기</button>`}</td>
     </tr>`;
   }
@@ -321,13 +360,15 @@
     renderBatch();
   }
   function addCourse(id, { quiet = false } = {}) {
-    if (state.selection.has(id) || !getCourse(id)) return;
-    state.selection.set(id, { courseId: id, status: 'candidate', allowedSectionIds: null });
+    const course = getCourse(id);
+    if (state.selection.has(id) || !course) return;
+    const allowed = filteredAllowedIds(course);
+    state.selection.set(id, { courseId: id, status: 'candidate', allowedSectionIds: allowed });
     state.checked.delete(id);
     closePopover(false);
     invalidate();
     renderCatalog();
-    if (!quiet) toast(`${getCourse(id).name}을(를) 담았어요.`);
+    if (!quiet) toast(allowed ? `${course.name}을(를) 담았어요. 필터에 맞는 ${allowed.length}개 분반만 허용했어요. 분반 단추로 바꿀 수 있어요.` : `${course.name}을(를) 담았어요.`);
   }
   function removeCourse(id) {
     const course = getCourse(id);
@@ -365,9 +406,12 @@
       const professors = uniqueText(allowedSections(course, selected).map(section => section.professor));
       const professorText = professors.length ? (professors.length > 2 ? `${professors[0]} 외 ${professors.length - 1}명` : professors.join('·')) : '교수 미확인';
       const fixed = selected.allowedSectionIds !== null;
+      // 여러 학과가 개설한 과목은 허용한 분반의 학과를 같이 보여줍니다.
+      const departments = course.departments.length > 1 ? uniqueText(allowedSections(course, selected).map(section => section.department)) : [];
+      const departmentText = departments.length ? ` · ${departments.length > 2 ? `${departments[0]} 외 ${departments.length - 1}개 학과` : departments.join('·')}` : '';
       return `<article class="selected-course ${selected.status === 'excluded' ? 'is-excluded' : ''}">
         <div class="selected-top"><button class="selected-name" data-detail-course="${esc(course.id)}">${esc(course.name)}</button><button class="remove-course" data-remove-course="${esc(course.id)}" aria-label="${esc(course.name)} 제거">${icon('close', 16)}</button></div>
-        <div class="selected-meta">${esc(course.code)} · ${esc(creditLabel(course, selected))} · ${esc(professorText)}</div>
+        <div class="selected-meta">${esc(course.code)} · ${esc(creditLabel(course, selected))} · ${esc(professorText)}${esc(departmentText)}</div>
         <div class="selected-actions">
           <div class="seg" role="group" aria-label="${esc(course.name)} 포함 상태">${Object.entries(STATUS).map(([value, label]) => `<button type="button" class="${selected.status === value ? 'on' : ''}" data-status-course="${esc(course.id)}" data-status="${value}" aria-pressed="${selected.status === value}">${label}</button>`).join('')}</div>
           <button class="sec-chip ${fixed ? 'fixed' : ''}" data-sections-course="${esc(course.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(course.name)} ${esc(sectionSummary(course, selected))}, 분반 설정">${esc(sectionSummary(course, selected))} <span aria-hidden="true">▾</span></button>
@@ -380,7 +424,7 @@
     $('generate').disabled = state.loading || state.generating || !active;
     $('generate').innerHTML = state.generating ? '<span class="spinner"></span> 후보 만드는 중…' : state.generated ? '후보 다시 만들기' : '시간표 후보 만들기';
     $('generate-note').textContent = engineFor() === 'server'
-      ? `백엔드 서버가 후보를 계산해요. 한 번에 ${window.TimetableAPI.LIMITS.courses}과목까지 보낼 수 있어요.`
+      ? `백엔드 서버가 후보를 계산해요. ${window.TimetableAPI.LIMITS.courses}과목까지는 서버로, 그보다 많으면(15과목까지) 화면 계산으로 만들어요.`
       : window.TimetableAPI.available() ? '설정에 따라 화면 미리보기 계산으로 만들어요.' : '서버 없이 열어서 화면 미리보기 계산으로 만들어요.';
     $('selection-stale').hidden = !stale;
     $('stale-dot').hidden = !stale;
@@ -388,7 +432,7 @@
   }
   function conditionLabels(conditions) {
     const labels = [];
-    if (conditions.credits !== null) labels.push(`${conditions.credits}학점`);
+    if (conditions.credits !== null) labels.push(creditsLabel(conditions.credits));
     if (conditions.count !== null) labels.push(`${conditions.count}과목`);
     if (conditions.freeDays.length) labels.push(`${conditions.freeDays.join('·')}요일 공강`);
     conditions.blockedTimes.forEach(block => labels.push(`${block.day} ${time(block.start)}–${time(block.end)} 제외`));
@@ -409,6 +453,14 @@
     popoverState = null;
     if (restoreFocus && anchor?.isConnected) anchor.focus();
   }
+  // 분반 선택창 항목. 필터가 걸려 있으면 필터에 맞는 분반을 먼저 보여주고, 나머지는 구분선 아래에 둡니다.
+  function renderSectionOptions(course, draft, filtered, multiDepartment) {
+    const option = section => `<label class="section-option ${draft.includes(section.id) ? 'is-selected' : ''}"><input type="checkbox" value="${esc(section.id)}" ${draft.includes(section.id) ? 'checked' : ''}><span class="section-option-body"><span class="section-option-top"><strong>${esc(section.number)}분반</strong><span class="section-option-professor">${esc(section.professor || '교수 미확인')}</span><span class="section-credit">${Number.isFinite(section.credits) ? `${section.credits}학점` : '학점 미확인'}</span></span><span class="section-option-times">${esc(meetingText(section))}</span><span class="section-option-note">${esc([multiDepartment ? (section.department || '학과 미확인') : null, section.categoryRaw || '구분 미확인', section.modeRaw || '방식 미확인', gradeKey(section.grade) === UNKNOWN ? '학년 미확인' : gradeLabelOf(gradeKey(section.grade)), section.timeStatus !== 'KNOWN' ? '시간 확인 필요' : null].filter(Boolean).join(' · '))}</span></span></label>`;
+    if (!filtered) return course.sections.map(option).join('');
+    const matching = course.sections.filter(section => filtered.includes(section.id));
+    const others = course.sections.filter(section => !filtered.includes(section.id));
+    return matching.map(option).join('') + (others.length ? `<p class="popover-divider">필터에 맞지 않는 분반 ${others.length}개</p>${others.map(option).join('')}` : '');
+  }
   function openPopover(id, anchor) {
     if (popoverState?.id === id && popoverState.anchor === anchor) { closePopover(); return; }
     closePopover(false);
@@ -416,12 +468,15 @@
     const course = getCourse(id);
     if (!course) return;
     const selected = state.selection.get(id);
-    const draft = allowedSections(course, selected).map(section => section.id);
+    // 아직 담지 않은 과목은 필터에 맞는 분반을 미리 체크해 둡니다. 학과가 여럿인 과목은 분반마다 개설학과를 보여줍니다.
+    const filtered = filteredAllowedIds(course);
+    const draft = selected ? allowedSections(course, selected).map(section => section.id) : (filtered || course.sections.map(section => section.id));
+    const multiDepartment = course.departments.length > 1;
     popoverState = { id, anchor, draft };
     anchor.setAttribute('aria-expanded', 'true');
-    $('section-popover').innerHTML = `<div class="popover-heading"><div><span class="eyebrow">분반 설정</span><h3 id="section-popover-title">${esc(course.name)}</h3></div><button class="all-sections-button" data-popover-action="all">전체 허용</button></div>
-      <p class="popover-hint">체크한 분반 중 하나만 시간표에 들어가요.</p>
-      <div class="popover-options">${course.sections.map(section => `<label class="section-option ${draft.includes(section.id) ? 'is-selected' : ''}"><input type="checkbox" value="${esc(section.id)}" ${draft.includes(section.id) ? 'checked' : ''}><span class="section-option-body"><span class="section-option-top"><strong>${esc(section.number)}분반</strong><span class="section-option-professor">${esc(section.professor || '교수 미확인')}</span><span class="section-credit">${Number.isFinite(section.credits) ? `${section.credits}학점` : '학점 미확인'}</span></span><span class="section-option-times">${esc(meetingText(section))}</span><span class="section-option-note">${esc([section.categoryRaw || '구분 미확인', section.modeRaw || '방식 미확인', gradeKey(section.grade) === UNKNOWN ? '학년 미확인' : gradeLabelOf(gradeKey(section.grade)), section.timeStatus !== 'KNOWN' ? '시간 확인 필요' : null].filter(Boolean).join(' · '))}</span></span></label>`).join('')}</div>
+    $('section-popover').innerHTML = `<div class="popover-heading"><div><span class="eyebrow">분반 설정</span><h3 id="section-popover-title">${esc(course.name)}</h3></div><div class="popover-heading-actions">${filtered ? '<button class="all-sections-button" data-popover-action="filtered">필터 분반만</button>' : ''}<button class="all-sections-button" data-popover-action="all">전체 허용</button></div></div>
+      <p class="popover-hint">체크한 분반 중 하나만 시간표에 들어가요.${filtered ? ` 지금 필터에 맞는 분반은 ${filtered.length}개예요.` : ''}${multiDepartment ? ' 학과가 다른 분반은 수강 대상이 다를 수 있어요.' : ''}</p>
+      <div class="popover-options">${renderSectionOptions(course, draft, filtered, multiDepartment)}</div>
       <div class="popover-validation" id="popover-validation" aria-live="polite"></div>
       <div class="popover-actions"><button class="button secondary small" data-popover-action="cancel">취소</button><button class="button primary small" data-popover-action="apply">${selected ? '적용' : '이 설정으로 담기'}</button></div>`;
     $('section-popover').hidden = false;
@@ -471,7 +526,8 @@
     closePopover(false);
     closeFilters();
     conditionsDraft = clone(state.conditions);
-    $('condition-credits').value = conditionsDraft.credits ?? '';
+    $('condition-credits').value = conditionsDraft.credits?.min ?? '';
+    $('condition-credits-max').value = conditionsDraft.credits?.max ?? '';
     $('condition-count').value = conditionsDraft.count ?? '';
     $('blocked-error').hidden = true;
     renderConditionEditor();
@@ -494,9 +550,10 @@
   }
   function applyConditions(event) {
     event.preventDefault();
-    const credits = $('condition-credits').value;
+    const creditsMin = $('condition-credits').value.trim();
+    const creditsMax = $('condition-credits-max').value.trim();
     const count = $('condition-count').value;
-    conditionsDraft.credits = credits === '' ? null : Number(credits);
+    conditionsDraft.credits = creditsMin === '' && creditsMax === '' ? null : { min: creditsMin === '' ? null : Number(creditsMin), max: creditsMax === '' ? null : Number(creditsMax) };
     conditionsDraft.count = count === '' ? null : Number(count);
     conditionsDraft.freeDays = [...$('free-day-choices').querySelectorAll('input:checked')].map(input => input.value);
     const next = sanitizeConditions(conditionsDraft);
@@ -546,7 +603,7 @@
     const engine = state.generating ? state.generatingEngine : state.generated ? state.resultEngine : engineFor();
     tag.textContent = ENGINE_LABELS[engine] || ENGINE_LABELS.browser;
     tag.classList.toggle('is-server', engine === 'server');
-    tag.classList.toggle('is-warning', engine === 'browser-fallback');
+    tag.classList.toggle('is-warning', engine === 'browser-fallback' || engine === 'browser-limit');
   }
   function renderReasons() {
     const items = [...state.generationWarnings];
@@ -633,10 +690,17 @@
   async function generate({ engine = engineFor() } = {}) {
     const active = selectedStatus().filter(selected => selected.status !== 'excluded');
     if (state.generating || !active.length) return;
-    const limit = engine === 'server' ? window.TimetableAPI.LIMITS.courses : 15;
-    if (active.length > limit) {
-      toast(engine === 'server' ? `서버 생성은 한 번에 최대 ${limit}과목까지 보낼 수 있어요. 과목을 빼거나 ‘제외’로 바꿔주세요.` : `미리보기에서는 최대 ${limit}과목까지 조합할 수 있어요.`);
+    // 서버는 한 번에 10과목까지만 받습니다. 그보다 많으면(15과목까지) 화면 계산으로 대신 만들고 그 사실을 표시합니다.
+    const serverLimit = window.TimetableAPI.LIMITS.courses;
+    const browserLimit = 15;
+    if (active.length > browserLimit) {
+      toast(`한 번에 최대 ${browserLimit}과목까지 조합할 수 있어요(서버는 ${serverLimit}과목). 과목을 빼거나 ‘제외’로 바꿔주세요.`);
       return;
+    }
+    let limitNote = null;
+    if (engine === 'server' && active.length > serverLimit) {
+      engine = 'browser-limit';
+      limitNote = `서버는 한 번에 ${serverLimit}과목까지만 받아서 ${active.length}과목은 화면 미리보기 계산으로 만들었어요. 백엔드가 과목 수 제한을 늘리면 서버 계산으로 바뀌어요.`;
     }
     closePopover(false);
     state.generating = true;
@@ -664,6 +728,7 @@
         }
       } else {
         result = await generateInBrowser(input);
+        if (engine === 'browser-limit') { result.engine = 'browser-limit'; result.warnings = [limitNote, ...result.warnings]; }
       }
       state.candidates = result.candidates;
       state.activeCandidate = 0;
@@ -778,12 +843,19 @@
       summary = '시간표 조건 초기화';
       reply = '시간표 조건을 초기화했어요.';
     } else {
+      const rangeMatch = text.match(/(\d{1,2})\s*(?:~|-|–|에서|부터)\s*(\d{1,2})\s*학점/);
       const creditMatch = text.match(/(\d{1,2})\s*학점/);
       const day = DAYS.find(value => text.includes(value + '요일'));
-      if (creditMatch && Number(creditMatch[1]) > 0 && Number(creditMatch[1]) <= 40) {
-        conditions.credits = Number(creditMatch[1]);
-        summary = `목표 ${conditions.credits}학점`;
-        reply = `목표 학점을 ${conditions.credits}학점으로 바꿨어요.`;
+      const within = value => Number.isInteger(value) && value > 0 && value <= 40;
+      if (rangeMatch && within(Number(rangeMatch[1])) && within(Number(rangeMatch[2]))) {
+        conditions.credits = sanitizeCreditRange({ min: Number(rangeMatch[1]), max: Number(rangeMatch[2]) });
+        summary = `목표 ${creditsLabel(conditions.credits)}`;
+        reply = `목표 학점을 ${creditsLabel(conditions.credits)}으로 바꿨어요.`;
+      } else if (creditMatch && within(Number(creditMatch[1]))) {
+        const value = Number(creditMatch[1]);
+        conditions.credits = /이상|넘게|최소/.test(text) ? { min: value, max: null } : /이하|까지|최대|넘지/.test(text) ? { min: null, max: value } : { min: value, max: value };
+        summary = `목표 ${creditsLabel(conditions.credits)}`;
+        reply = `목표 학점을 ${creditsLabel(conditions.credits)}으로 바꿨어요.`;
       } else if (day && /오전/.test(text)) {
         if (!conditions.blockedTimes.some(item => item.day === day && item.start === 540 && item.end === 720)) conditions.blockedTimes.push({ id: `ai-${Date.now()}`, day, start: 540, end: 720 });
         summary = `${day}요일 09:00–12:00 제외`;
@@ -800,7 +872,7 @@
   }
   function describeConditionChange(before, after) {
     const parts = [];
-    if (before.credits !== after.credits) parts.push(after.credits === null ? '목표 학점 해제' : `목표 ${after.credits}학점`);
+    if (creditsLabel(before.credits) !== creditsLabel(after.credits)) parts.push(after.credits === null ? '목표 학점 해제' : `목표 ${creditsLabel(after.credits)}`);
     if (before.count !== after.count) parts.push(after.count === null ? '과목 수 제한 해제' : `${after.count}과목`);
     const addedDays = after.freeDays.filter(day => !before.freeDays.includes(day));
     const removedDays = before.freeDays.filter(day => !after.freeDays.includes(day));
@@ -847,13 +919,20 @@
     const history = state.messages.slice(-11, -1).map(message => ({ role: message.role, text: message.text }));
     let result;
     let failure = null;
+    // 챗 서버 계약의 credits 는 정수 하나라, 범위는 대표값(최소 또는 최대)과 credits_min/credits_max 로 함께 보냅니다.
+    const standIn = before.credits ? (before.credits.min !== null ? before.credits.min : before.credits.max) : null;
+    const outbound = { ...before, credits: standIn, credits_min: before.credits ? before.credits.min : null, credits_max: before.credits ? before.credits.max : null };
     try {
-      result = await window.ChatAPI.send({ message: text, conditions: before, history });
+      result = await window.ChatAPI.send({ message: text, conditions: outbound, history });
     } catch (error) {
       failure = error;
       result = localChatRules(text, before);
     }
     const next = sanitizeConditions(result.updatedConditions || before);
+    // 범위를 모르는 서버가 보낸 대표값을 그대로 돌려주면 원래 범위를 유지합니다.
+    const responded = result.updatedConditions && typeof result.updatedConditions === 'object' ? result.updatedConditions : {};
+    const rangeAware = ['credits_min', 'credits_max', 'creditsMin', 'creditsMax'].some(key => responded[key] !== undefined) || (responded.credits && typeof responded.credits === 'object');
+    if (before.credits && next.credits && !rangeAware && next.credits.min === standIn && next.credits.max === standIn) next.credits = clone(before.credits);
     const changed = JSON.stringify(next) !== JSON.stringify(before);
     let reply = result.reply;
     if (changed) {
@@ -1092,11 +1171,18 @@
   });
   $('batch-add').addEventListener('click', () => {
     const ids = [...state.checked];
-    ids.forEach(id => { if (getCourse(id) && !state.selection.has(id)) state.selection.set(id, { courseId: id, status: 'candidate', allowedSectionIds: null }); });
+    let narrowedCount = 0;
+    ids.forEach(id => {
+      const course = getCourse(id);
+      if (!course || state.selection.has(id)) return;
+      const allowed = filteredAllowedIds(course);
+      if (allowed) narrowedCount += 1;
+      state.selection.set(id, { courseId: id, status: 'candidate', allowedSectionIds: allowed });
+    });
     state.checked.clear();
     invalidate();
     renderCatalog();
-    toast(`${ids.length}개 과목을 담았어요.`);
+    toast(narrowedCount ? `${ids.length}개 과목을 담았어요. ${narrowedCount}개는 필터에 맞는 분반만 허용했어요.` : `${ids.length}개 과목을 담았어요.`);
   });
   $('section-popover').addEventListener('change', updatePopoverValidation);
   $('section-popover').addEventListener('click', event => {
@@ -1104,12 +1190,17 @@
     if (action === 'cancel') closePopover();
     else if (action === 'apply') applyPopover();
     else if (action === 'all') { $('section-popover').querySelectorAll('input').forEach(input => { input.checked = true; }); updatePopoverValidation(); }
+    else if (action === 'filtered' && popoverState) {
+      const ids = new Set(matchingSections(getCourse(popoverState.id)).map(section => section.id));
+      $('section-popover').querySelectorAll('input').forEach(input => { input.checked = ids.has(input.value); });
+      updatePopoverValidation();
+    }
   });
   $('section-popover').addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); closePopover(); } });
   $('conditions-form').addEventListener('submit', applyConditions);
   $('free-day-choices').addEventListener('change', () => { conditionsDraft.freeDays = [...$('free-day-choices').querySelectorAll('input:checked')].map(input => input.value); });
   $('add-blocked').addEventListener('click', addBlockedTime);
-  $('reset-conditions').addEventListener('click', () => { conditionsDraft = emptyConditions(); $('condition-credits').value = ''; $('condition-count').value = ''; $('blocked-error').hidden = true; renderConditionEditor(); });
+  $('reset-conditions').addEventListener('click', () => { conditionsDraft = emptyConditions(); $('condition-credits').value = ''; $('condition-credits-max').value = ''; $('condition-count').value = ''; $('blocked-error').hidden = true; renderConditionEditor(); });
   $('chat-form').addEventListener('submit', event => { event.preventDefault(); sendChat($('chat-input').value); });
   $('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); sendChat($('chat-input').value); } });
   document.addEventListener('change', event => {

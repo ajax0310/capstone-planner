@@ -71,11 +71,20 @@
     const maxChecks = integerLimit(config.maxChecks, 30000, 200000);
     const conditions = config.conditions && typeof config.conditions === 'object'
       ? config.conditions : {};
-    const targetCredits = conditions.credits == null ? null : conditions.credits;
+    // 목표 학점은 범위 {min, max} 입니다. 정수 하나면 min=max, 한쪽만 있으면 그쪽만 검사합니다.
+    const rawCredits = conditions.credits == null ? null : conditions.credits;
+    const creditRange = rawCredits === null ? null
+      : typeof rawCredits === 'object'
+        ? { min: rawCredits.min == null ? null : rawCredits.min, max: rawCredits.max == null ? null : rawCredits.max }
+        : { min: rawCredits, max: rawCredits };
+    const targetMin = creditRange && creditRange.min !== null ? creditRange.min : null;
+    const targetMax = creditRange && creditRange.max !== null ? creditRange.max : null;
     const targetCount = conditions.count == null ? null : conditions.count;
 
-    if (targetCredits !== null && (!finiteNumber(targetCredits) || targetCredits < 0)) {
-      warn('목표 학점은 0 이상의 유효한 숫자여야 합니다.');
+    if ((targetMin !== null && (!finiteNumber(targetMin) || targetMin < 0))
+      || (targetMax !== null && (!finiteNumber(targetMax) || targetMax < 0))
+      || (targetMin !== null && targetMax !== null && targetMin > targetMax)) {
+      warn('목표 학점은 0 이상의 유효한 숫자여야 하고, 범위면 최소가 최대보다 클 수 없습니다.');
       return finish();
     }
     if (targetCount !== null && (!Number.isInteger(targetCount) || targetCount < 0)) {
@@ -224,7 +233,8 @@
     function keepCandidate(state) {
       if (state.count === 0) return;
       if (targetCount !== null && state.count !== targetCount) return;
-      if (targetCredits !== null && Math.abs(state.credits - targetCredits) > EPSILON) return;
+      if (targetMin !== null && state.credits < targetMin - EPSILON) return;
+      if (targetMax !== null && state.credits > targetMax + EPSILON) return;
       const sections = state.sections.map(({ courseId, sectionId }) => ({ courseId, sectionId }))
         .sort((left, right) => left.courseId.localeCompare(right.courseId));
       // JSON 직렬화를 사용해 ID 안의 구분 문자로 후보가 충돌하지 않도록 합니다.
@@ -246,8 +256,8 @@
       const index = state.index;
       if (targetCount !== null && (state.count + requiredCounts[index] > targetCount
         || state.count + entries.length - index < targetCount)) return [];
-      if (targetCredits !== null && (state.credits + requiredCredits[index] > targetCredits + EPSILON
-        || state.credits + remainingCredits[index] < targetCredits - EPSILON)) return [];
+      if (targetMax !== null && state.credits + requiredCredits[index] > targetMax + EPSILON) return [];
+      if (targetMin !== null && state.credits + remainingCredits[index] < targetMin - EPSILON) return [];
       if (candidates.length === maxResults
         && state.count + entries.length - index < candidates[candidates.length - 1].count) return [];
       if (index === entries.length) {
@@ -259,7 +269,7 @@
       for (const option of entry.options) {
         if (clashes(option.meetings, state.meetings)) continue;
         if (targetCount !== null && state.count + 1 > targetCount) continue;
-        if (targetCredits !== null && state.credits + option.credits > targetCredits + EPSILON) continue;
+        if (targetMax !== null && state.credits + option.credits > targetMax + EPSILON) continue;
         result.push({
           index: index + 1,
           sections: state.sections.concat(option),

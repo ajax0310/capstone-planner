@@ -7,6 +7,21 @@
   const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
   const WEEKDAYS = DAYS.slice(0, 5);
   const LIMITS = { courses: 10, results: 30 };
+  // 목표 학점은 {min, max} 범위(정수 하나면 min=max). 서버가 아직 받지 않아 결과를 화면에서 거릅니다.
+  function creditRange(value) {
+    const bound = raw => raw === null || raw === undefined || raw === '' || !Number.isFinite(Number(raw)) ? null : Number(raw);
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'object') {
+      const min = bound(value.min);
+      const max = bound(value.max);
+      return min === null && max === null ? null : { min, max };
+    }
+    const single = bound(value);
+    return single === null ? null : { min: single, max: single };
+  }
+  const creditLabel = range => range.min !== null && range.max !== null
+    ? (range.min === range.max ? `${range.min}학점` : `${range.min}~${range.max}학점`)
+    : range.min !== null ? `${range.min}학점 이상` : `${range.max}학점 이하`;
 
   const text = value => value === null || value === undefined || String(value).trim() === '' ? null : String(value).trim();
   const number = value => { const parsed = Number(value); return value !== null && value !== '' && Number.isFinite(parsed) ? parsed : null; };
@@ -162,11 +177,11 @@
       if (pin.bridged) warnings.push(`${pin.name}: 분반 고정을 담당교수(${pin.professor}) 조건으로 서버에 보냈어요.`);
       else warnings.push(`${pin.name}: 분반 고정은 서버가 아직 받지 않아 화면에서 걸렀어요. (서버 후보 ${before}개 중 ${removed}개 제외)`);
     }
-    const targetCredits = conditions && number(conditions.credits);
-    if (targetCredits !== null && targetCredits !== undefined) {
+    const target = creditRange(conditions && conditions.credits);
+    if (target) {
       const before = candidates.length;
-      candidates = candidates.filter(candidate => candidate.credits === targetCredits);
-      warnings.push(`목표 ${targetCredits}학점: 서버가 아직 받지 않아 화면에서 걸렀어요. (서버 후보 ${before}개 중 ${before - candidates.length}개 제외)`);
+      candidates = candidates.filter(candidate => (target.min === null || candidate.credits >= target.min) && (target.max === null || candidate.credits <= target.max));
+      warnings.push(`목표 ${creditLabel(target)}: 서버가 아직 받지 않아 화면에서 걸렀어요. (서버 후보 ${before}개 중 ${before - candidates.length}개 제외)`);
     }
     const targetCount = conditions && number(conditions.count);
     if (targetCount !== null && targetCount !== undefined) {
