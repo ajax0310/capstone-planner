@@ -1,12 +1,13 @@
 /* 시간표 후보 생성: 백엔드 POST /timetables/generate 호출과 화면 선택·조건의 변환.
    서버 API가 아직 받지 않는 조건(필수·후보 구분, 분반 고정, 목표 학점·과목 수)은 여기서 보완하고 그 사실을 안내문으로 남깁니다.
-   실측한 서버 동작(2026-11-04): 보낸 과목을 모두 포함하는 조합만 찾고, 시간 미확인 분반은 제외하며, professor_filters 는 교수 이름 정확 일치입니다. */
+   실측한 서버 동작(2026-11-04): 보낸 과목을 모두 포함하는 조합만 찾고, 시간 미확인 분반은 제외하며, professor_filters 는 교수 이름 정확 일치입니다.
+   과목 수 상한은 2026-11-06에 10 → 15로 늘었습니다(16과목은 422). */
 (function (root) {
   'use strict';
 
   const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
   const WEEKDAYS = DAYS.slice(0, 5);
-  const LIMITS = { courses: 10, results: 30 };
+  const LIMITS = { courses: 15, results: 30 };
   // 목표 학점은 {min, max} 범위(정수 하나면 min=max). 서버가 아직 받지 않아 결과를 화면에서 거릅니다.
   function creditRange(value) {
     const bound = raw => raw === null || raw === undefined || raw === '' || !Number.isFinite(Number(raw)) ? null : Number(raw);

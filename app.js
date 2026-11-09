@@ -91,6 +91,12 @@
     return cfg.generateMode !== 'browser' && window.TimetableAPI.available() ? 'server' : 'browser';
   }
   const ENGINE_LABELS = { server: '서버 계산', browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패', 'browser-limit': '화면 계산 · 과목 수 초과' };
+  // 한 번에 조합할 수 있는 과목 수. 서버 상한(timetable-api.js LIMITS.courses, 2026-11-06부터 15)이 화면 상한보다 낮아지면 그 사이는 화면 계산으로 대신합니다.
+  const BROWSER_COURSE_LIMIT = 15;
+  function courseLimits() {
+    const server = window.TimetableAPI.LIMITS.courses;
+    return { server, browser: Math.max(server, BROWSER_COURSE_LIMIT) };
+  }
   function toast(message) {
     clearTimeout(toastTimer);
     $('toast').textContent = message;
@@ -423,8 +429,11 @@
     const stale = isStale();
     $('generate').disabled = state.loading || state.generating || !active;
     $('generate').innerHTML = state.generating ? '<span class="spinner"></span> 후보 만드는 중…' : state.generated ? '후보 다시 만들기' : '시간표 후보 만들기';
+    const limits = courseLimits();
     $('generate-note').textContent = engineFor() === 'server'
-      ? `백엔드 서버가 후보를 계산해요. ${window.TimetableAPI.LIMITS.courses}과목까지는 서버로, 그보다 많으면(15과목까지) 화면 계산으로 만들어요.`
+      ? (limits.server < limits.browser
+        ? `백엔드 서버가 후보를 계산해요. ${limits.server}과목까지는 서버로, 그보다 많으면(${limits.browser}과목까지) 화면 계산으로 만들어요.`
+        : `백엔드 서버가 후보를 계산해요. 한 번에 ${limits.server}과목까지 보낼 수 있어요.`)
       : window.TimetableAPI.available() ? '설정에 따라 화면 미리보기 계산으로 만들어요.' : '서버 없이 열어서 화면 미리보기 계산으로 만들어요.';
     $('selection-stale').hidden = !stale;
     $('stale-dot').hidden = !stale;
@@ -690,11 +699,10 @@
   async function generate({ engine = engineFor() } = {}) {
     const active = selectedStatus().filter(selected => selected.status !== 'excluded');
     if (state.generating || !active.length) return;
-    // 서버는 한 번에 10과목까지만 받습니다. 그보다 많으면(15과목까지) 화면 계산으로 대신 만들고 그 사실을 표시합니다.
-    const serverLimit = window.TimetableAPI.LIMITS.courses;
-    const browserLimit = 15;
+    // 서버는 한 번에 15과목까지 받습니다(2026-11-06). 서버 상한이 화면 상한보다 낮을 때만 그 사이를 화면 계산으로 대신 만들고 그 사실을 표시합니다.
+    const { server: serverLimit, browser: browserLimit } = courseLimits();
     if (active.length > browserLimit) {
-      toast(`한 번에 최대 ${browserLimit}과목까지 조합할 수 있어요(서버는 ${serverLimit}과목). 과목을 빼거나 ‘제외’로 바꿔주세요.`);
+      toast(`한 번에 최대 ${browserLimit}과목까지 조합할 수 있어요${serverLimit < browserLimit ? `(서버는 ${serverLimit}과목)` : ''}. 과목을 빼거나 ‘제외’로 바꿔주세요.`);
       return;
     }
     let limitNote = null;
