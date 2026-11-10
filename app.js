@@ -433,7 +433,7 @@
     $('generate-note').textContent = engineFor() === 'server'
       ? (limits.server < limits.browser
         ? `백엔드 서버가 후보를 계산해요. ${limits.server}과목까지는 서버로, 그보다 많으면(${limits.browser}과목까지) 화면 계산으로 만들어요.`
-        : `백엔드 서버가 후보를 계산해요. 한 번에 ${limits.server}과목까지 보낼 수 있어요.`)
+        : `백엔드 서버가 필수·후보 과목과 목표에 맞춰 후보를 골라요. 한 번에 ${limits.server}과목까지 담을 수 있어요.`)
       : window.TimetableAPI.available() ? '설정에 따라 화면 미리보기 계산으로 만들어요.' : '서버 없이 열어서 화면 미리보기 계산으로 만들어요.';
     $('selection-stale').hidden = !stale;
     $('stale-dot').hidden = !stale;
@@ -699,7 +699,7 @@
   async function generate({ engine = engineFor() } = {}) {
     const active = selectedStatus().filter(selected => selected.status !== 'excluded');
     if (state.generating || !active.length) return;
-    // 서버는 한 번에 15과목까지 받습니다(2026-11-06). 서버 상한이 화면 상한보다 낮을 때만 그 사이를 화면 계산으로 대신 만들고 그 사실을 표시합니다.
+    // 서버(/timetables/select)는 한 번에 30과목까지 받습니다(2026-11-10). 서버 상한이 화면 상한보다 낮을 때만 그 사이를 화면 계산으로 대신 만들고 그 사실을 표시합니다.
     const { server: serverLimit, browser: browserLimit } = courseLimits();
     if (active.length > browserLimit) {
       toast(`한 번에 최대 ${browserLimit}과목까지 조합할 수 있어요${serverLimit < browserLimit ? `(서버는 ${serverLimit}과목)` : ''}. 과목을 빼거나 ‘제외’로 바꿔주세요.`);
