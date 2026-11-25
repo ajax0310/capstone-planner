@@ -946,12 +946,6 @@
   }
 
   // ---------- 강의 목록 불러오기 ----------
-  function formatStamp(iso, live) {
-    const date = iso ? new Date(iso) : null;
-    if (!date || Number.isNaN(date.getTime())) return live ? '서버 목록' : '저장된 목록';
-    if (live) return `서버 ${new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(date)} 기준`;
-    return `저장본 ${new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date)} 기준`;
-  }
   // 담은 과목의 분반·교수·시간을 한 줄로 요약합니다. 목록을 바꿔 끼운 뒤 실제로 달라졌을 때만 "조건이 바뀌었어요"를 띄우기 위해 씁니다.
   function selectionSignature() {
     return [...state.selection.keys()].map(id => {
@@ -993,7 +987,6 @@
     populateFilters();
     const year = result.dataset.year || '—';
     const term = result.dataset.semester || '—';
-    const live = result.source === 'live';
     state.semesters = Array.isArray(result.semesters) ? result.semesters : [];
     if (Number.isInteger(result.dataset.year) && Number.isInteger(result.dataset.semester)) state.semesterChoice = { year: result.dataset.year, semester: result.dataset.semester };
     $('semester-heading').textContent = `${year}학년도 ${term}학기`;
@@ -1002,7 +995,7 @@
     state.refreshFailure = null;
     renderDatasetLabel();
     if (result.notice) $('dataset-label').title = result.notice;
-    $('source-footer').innerHTML = `<b>${esc(year)}년 ${esc(term)}학기</b> 개설강좌 ${result.dataset.sectionCount.toLocaleString()}분반 · ${state.courses.length.toLocaleString()}과목 · ${esc(formatStamp(result.fetchedAt, live))}`;
+    $('source-footer').innerHTML = `<b>${esc(year)}년 ${esc(term)}학기</b>`;
     if (removed) toast(`현재 자료에 없는 ${removed}개 과목을 선택 목록에서 뺐어요.`);
     save();
     return removed;
