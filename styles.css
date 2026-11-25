@@ -141,6 +141,21 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .multi-filter.has-selection .multi-filter-input, .multi-filter.has-selection .multi-filter-input::placeholder { color: #fff; }
 .multi-filter-summary { display: none; }
 .multi-filter-clear, .multi-filter-toggle { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; height: 28px; border-radius: 50%; color: var(--blue); font-size: 15px; line-height: 1; }
+.multi-filter-toggle { font-size: 0; }
+.multi-filter-toggle::after {
+  content: "";
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-radius: 1px;
+  transform: translateY(-2px) rotate(45deg);
+}
+.multi-filter-toggle[aria-expanded="true"]::after { transform: translateY(2px) rotate(225deg); }
+@media (prefers-reduced-motion: no-preference) {
+  .multi-filter-toggle::after { transition: transform .15s ease; }
+}
 .multi-filter.has-selection .multi-filter-clear, .multi-filter.has-selection .multi-filter-toggle { color: #fff; }
 .multi-filter-clear:hover, .multi-filter-toggle:hover { background: rgb(0 0 0 / 8%); }
 #reset-filters { justify-self: start; }
