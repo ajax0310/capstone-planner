@@ -978,21 +978,8 @@
     if (state.refreshing) text += state.loadStatus && state.loadStatus.phase === 'waking' ? ' · 서버 깨우는 중' : ' · 서버 확인 중';
     else if (state.refreshFailure) text += ' · 서버 연결 실패';
     label.textContent = text;
+    label.title = state.refreshFailure || '';
     label.classList.toggle('is-live', live);
-  }
-  function renderRefreshNotice() {
-    const box = $('source-notice');
-    const current = state.source === 'live' ? '서버' : '저장된';
-    if (state.refreshing) {
-      const waking = state.loadStatus && state.loadStatus.phase === 'waking';
-      box.hidden = false;
-      box.textContent = waking
-        ? `잠든 서버를 깨우는 중이에요. 1분 정도 걸릴 수 있어요. 지금 보이는 ${current} 목록은 그대로 쓸 수 있어요.`
-        : `서버에서 최신 강의 목록을 받는 중이에요. 지금 보이는 ${current} 목록은 그대로 쓸 수 있어요.`;
-    } else if (state.refreshFailure) {
-      box.hidden = false;
-      box.textContent = `서버 강의 목록을 받지 못했어요. (${state.refreshFailure}) 지금 보이는 ${current} 목록을 그대로 쓰고, 새로고침 단추로 다시 시도할 수 있어요.`;
-    }
   }
   function applyCatalog(result) {
     const hadDataset = Boolean(state.dataset);
@@ -1025,9 +1012,8 @@
     state.via = result.via || null;
     state.refreshFailure = null;
     renderDatasetLabel();
+    if (result.notice) $('dataset-label').title = result.notice;
     $('source-footer').innerHTML = `<b>${esc(year)}년 ${esc(term)}학기</b> 개설강좌 ${result.dataset.sectionCount.toLocaleString()}분반 · ${state.courses.length.toLocaleString()}과목 · ${esc(formatStamp(result.fetchedAt, live))}`;
-    $('source-notice').hidden = !result.notice;
-    $('source-notice').textContent = result.notice || '';
     if (removed) toast(`현재 자료에 없는 ${removed}개 과목을 선택 목록에서 뺐어요.`);
     save();
     return removed;
@@ -1055,12 +1041,12 @@
     state.refreshFailure = null;
     if (background) {
       renderDatasetLabel();
-      renderRefreshNotice();
     } else {
       state.loading = true;
       renderCatalog();
       renderSelection();
       $('dataset-label').textContent = '강의 목록 불러오는 중';
+      $('dataset-label').title = '';
       $('dataset-label').classList.remove('is-live');
     }
     $('reload-catalog').disabled = true;
@@ -1073,7 +1059,8 @@
         onStatus: status => {
           if (controller !== loadController) return;
           state.loadStatus = status;
-          if (background) { renderDatasetLabel(); renderRefreshNotice(); } else renderCatalogState();
+          if (background) renderDatasetLabel();
+          else renderCatalogState();
         }
       });
       if (controller !== loadController) return;
@@ -1086,7 +1073,6 @@
         state.refreshing = false;
         state.refreshFailure = error.message || '연결 실패';
         renderDatasetLabel();
-        renderRefreshNotice();
       } else {
         state.error = error.message || '잠시 후 다시 시도해주세요.';
         $('dataset-label').textContent = '강의 목록 연결 실패';

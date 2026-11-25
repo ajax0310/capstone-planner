@@ -74,7 +74,6 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; font-size: 13.5px; color: var(--blue); background: var(--blue-tint); }
 .active .tab-count { color: #fff; background: var(--blue); }
 .tab-dot { width: 10px; height: 10px; border-radius: 50%; background: #f0a21f; box-shadow: 0 0 0 3px #fff; }
-.source-notice { margin: 14px 28px 0; padding: 11px 16px; border: 1px solid #cfe0f5; border-radius: 10px; color: #35557d; background: #eaf3fb; font-size: 14.5px; }
 
 /* 작업 영역과 카드 */
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) var(--selection-width) var(--chat-width); gap: 18px; padding: 18px 28px 0; align-items: stretch; }
@@ -415,7 +414,6 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 @media (max-width: 1400px) {
   .topbar, .infobar, .view-tabs, .app-footer { padding-left: 20px; padding-right: 20px; }
   .workspace { gap: 14px; padding-left: 20px; padding-right: 20px; }
-  .source-notice { margin-left: 20px; margin-right: 20px; }
   .infobar-right { display: none; }
   .card-head { padding-left: 16px; padding-right: 16px; }
   .toolbar { padding-left: 16px; padding-right: 16px; }
