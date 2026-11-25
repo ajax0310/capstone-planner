@@ -90,7 +90,7 @@
     const cfg = window.PKNU_CONFIG || {};
     return cfg.generateMode !== 'browser' && window.TimetableAPI.available() ? 'server' : 'browser';
   }
-  const ENGINE_LABELS = { server: '서버 계산', browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패', 'browser-limit': '화면 계산 · 과목 수 초과' };
+  const ENGINE_LABELS = { browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패', 'browser-limit': '화면 계산 · 과목 수 초과' };
   // 한 번에 조합할 수 있는 과목 수. 서버 상한(timetable-api.js LIMITS.courses, 2026-11-06부터 15)이 화면 상한보다 낮아지면 그 사이는 화면 계산으로 대신합니다.
   const BROWSER_COURSE_LIMIT = 15;
   function courseLimits() {
@@ -610,8 +610,8 @@
   function renderEngineTag() {
     const tag = $('engine-tag');
     const engine = state.generating ? state.generatingEngine : state.generated ? state.resultEngine : engineFor();
-    tag.textContent = ENGINE_LABELS[engine] || ENGINE_LABELS.browser;
-    tag.classList.toggle('is-server', engine === 'server');
+    tag.hidden = engine === 'server';
+    tag.textContent = tag.hidden ? '' : ENGINE_LABELS[engine] || ENGINE_LABELS.browser;
     tag.classList.toggle('is-warning', engine === 'browser-fallback' || engine === 'browser-limit');
   }
   function renderReasons() {
