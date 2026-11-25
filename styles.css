@@ -87,6 +87,9 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .card-head { display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
 .card-head.compact { padding: 16px 18px 14px; }
 .card-head-text { min-width: 0; flex: 1; }
+.catalog-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.catalog-heading h2, .catalog-limit { white-space: nowrap; }
+.catalog-limit { color: var(--muted); font-size: 13.5px; }
 .card-head-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .card-sub { color: var(--muted); font-size: 14.5px; margin-top: 2px; line-height: 1.4; }
 .tile { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; color: #fff; }
