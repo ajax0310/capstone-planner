@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="국립부경대학교 강의 목록에서 과목을 고르고 시간표 후보를 비교하는 PC용 수강 플래너">
   <title>국립부경대학교 · 수강 플래너</title>
-  <link rel="stylesheet" href="styles.css?v=8496a0ac">
+  <link rel="stylesheet" href="styles.css?v=ea43a068">
 </head>
 <body>
   <header class="topbar">
@@ -81,7 +81,11 @@
       <div class="selection-content" id="selection-content">
         <div class="card-head compact">
           <div class="tile tile-teal" id="selection-tile" aria-hidden="true"></div>
-          <div class="card-head-text"><h2>선택한 과목 <span class="quiet-count" id="selected-count">0</span></h2><p class="card-sub" id="selection-summary">아직 담은 과목이 없어요.</p></div>
+          <div class="card-head-text">
+            <h2>선택한 과목 <span class="quiet-count" id="selected-count">0</span></h2>
+            <p class="card-sub" id="selection-limit" title="필수·후보 과목 합계 기준">조합 대상 최대 30과목</p>
+            <p class="card-sub" id="selection-summary" hidden></p>
+          </div>
           <button class="icon-button" id="collapse-selection" aria-label="선택 과목 패널 접기"></button>
         </div>
         <div class="selected-list" id="selected-list"></div>
@@ -92,7 +96,6 @@
             <div class="stale-inline" id="selection-stale" role="status" hidden>조건이 바뀌었어요. 후보를 다시 만들어야 반영돼요.</div>
           </div>
           <button class="button primary generate-button" id="generate" disabled>시간표 후보 만들기</button>
-          <p class="preview-note" id="generate-note">백엔드 서버가 후보를 계산해요.</p>
         </div>
       </div>
     </aside>
@@ -108,11 +111,10 @@
         <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
         <div class="chat-suggestions" id="chat-suggestions"><button data-prompt="목요일 오전은 비워줘">목요일 오전은 비워줘</button><button data-prompt="금요일은 공강으로 해줘">금요일은 공강으로</button><button data-prompt="18학점으로 맞춰줘">18학점으로 맞춰줘</button></div>
         <form class="chat-form" id="chat-form"><label class="sr-only" for="chat-input">AI 도우미에게 요청</label><textarea id="chat-input" rows="1" placeholder="메시지를 입력하세요" maxlength="400"></textarea><button type="submit" class="chat-send" id="chat-send">보내기</button></form>
-        <p class="chat-status" id="chat-status" role="status"></p>
+        <p class="chat-status" id="chat-status" role="status" hidden></p>
       </div>
     </aside>
   </main>
-  <footer class="app-footer"><span id="app-footer-left">국립부경대학교 수강 플래너 · 캡스톤 디자인</span><span>PC·노트북 브라우저 기준</span></footer>
 
   <div class="section-popover" id="section-popover" role="dialog" aria-labelledby="section-popover-title" hidden></div>
 
@@ -161,6 +163,6 @@
   <script src="chat.js"></script>
   <script src="timetable-api.js"></script>
   <script src="export.js"></script>
-  <script src="app.js?v=b5040a55"></script>
+  <script src="app.js?v=b04510e7"></script>
 </body>
 </html>

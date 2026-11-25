@@ -91,7 +91,7 @@
     return cfg.generateMode !== 'browser' && window.TimetableAPI.available() ? 'server' : 'browser';
   }
   const ENGINE_LABELS = { browser: '화면 미리보기 계산', 'browser-fallback': '화면 계산 · 서버 연결 실패', 'browser-limit': '화면 계산 · 과목 수 초과' };
-  // 한 번에 조합할 수 있는 과목 수. 서버 상한(timetable-api.js LIMITS.courses, 2026-11-06부터 15)이 화면 상한보다 낮아지면 그 사이는 화면 계산으로 대신합니다.
+  // 서버 상한이 브라우저 계산 상한보다 낮으면 그 사이에 있는 과목 수는 브라우저에서 계산합니다.
   const BROWSER_COURSE_LIMIT = 15;
   function courseLimits() {
     const server = window.TimetableAPI.LIMITS.courses;
@@ -395,7 +395,9 @@
     selections.forEach(selected => { counts[selected.status] += 1; });
     $('selected-count').textContent = selections.length;
     $('selection-rail-count').textContent = selections.length;
-    $('selection-summary').textContent = selections.length ? `필수 ${counts.required} · 후보 ${counts.candidate} · 제외 ${counts.excluded}` : '관심 있는 과목을 담아보세요.';
+    const summary = $('selection-summary');
+    summary.hidden = !selections.length;
+    summary.textContent = selections.length ? `필수 ${counts.required} · 후보 ${counts.candidate} · 제외 ${counts.excluded}` : '';
     const credits = selectionCredits();
     $('selection-brief').innerHTML = selections.length ? `담은 과목 <b>${selections.length}과목 · ${credits.sum}학점${credits.unknown ? '+' : ''}</b>` : '담은 과목 없음';
     const list = $('selected-list');
@@ -422,12 +424,6 @@
     const stale = isStale();
     $('generate').disabled = state.loading || state.generating || !active;
     $('generate').innerHTML = state.generating ? '<span class="spinner"></span> 후보 만드는 중…' : state.generated ? '후보 다시 만들기' : '시간표 후보 만들기';
-    const limits = courseLimits();
-    $('generate-note').textContent = engineFor() === 'server'
-      ? (limits.server < limits.browser
-        ? `백엔드 서버가 후보를 계산해요. ${limits.server}과목까지는 서버로, 그보다 많으면(${limits.browser}과목까지) 화면 계산으로 만들어요.`
-        : `백엔드 서버가 필수·후보 과목과 목표에 맞춰 후보를 골라요. 한 번에 ${limits.server}과목까지 담을 수 있어요.`)
-      : window.TimetableAPI.available() ? '설정에 따라 화면 미리보기 계산으로 만들어요.' : '서버 없이 열어서 화면 미리보기 계산으로 만들어요.';
     $('selection-stale').hidden = !stale;
     $('stale-dot').hidden = !stale;
     renderConditionSummary();
@@ -889,14 +885,14 @@
   const sourceLabel = source => source === 'local' ? '예시 규칙' : source === 'fallback' ? '서버 기본 규칙' : source && source !== 'server' ? `AI · ${source}` : 'AI 서버';
   function renderChatStatus() {
     const status = $('chat-status');
-    let text;
+    let text = '';
     let warning = false;
     if (!window.ChatAPI.available()) text = '서버로 실행하면 AI 챗봇에 연결돼요. 지금은 예시 규칙으로 답해요.';
     else if (state.chatFailure === 'error') { text = 'AI 서버에 연결하지 못해 예시 규칙으로 답했어요.'; warning = true; }
     else if (state.chatSource === 'fallback') { text = 'AI 서버가 LLM 없이 기본 규칙으로 답하고 있어요.'; warning = true; }
     else if (state.chatSource) text = `AI 서버 연결됨 · ${state.chatSource}`;
-    else text = '공강, 피하고 싶은 시간, 목표 학점을 말로 요청할 수 있어요.';
     status.textContent = text;
+    status.hidden = !text;
     status.classList.toggle('is-warning', warning);
   }
   function renderChat() {
@@ -1117,6 +1113,7 @@
   $('selection-tile').innerHTML = icon('cart', 22);
   $('chat-tile').innerHTML = icon('sparkle', 22);
   $('show-added').checked = state.showAdded;
+  $('selection-limit').textContent = `조합 대상 최대 ${courseLimits().browser}과목`;
 
   $('catalog-tab').addEventListener('click', () => setView('catalog'));
   $('timetable-tab').addEventListener('click', () => setView('timetable'));
