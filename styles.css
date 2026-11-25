@@ -11,7 +11,6 @@
   --tile-purple: #8f8bf2;
   --tile-navy: #4c7bc4;
   --bg: #f2f3f5;
-  --info: #e8edf3;
   --card: #fff;
   --line: #e6e9ee;
   --row: #eef0f3;
@@ -64,10 +63,13 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .semester-select { height: 34px; max-width: 220px; border: 1px solid #cfe0f5; border-radius: 999px; padding: 0 30px 0 14px; background: var(--blue-tint) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230a5bab' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") no-repeat right 11px center; color: var(--blue); font-size: 14.5px; font-weight: 700; appearance: none; -webkit-appearance: none; white-space: nowrap; }
 .semester-select:disabled { opacity: .6; cursor: default; }
 .topbar .icon-button { color: var(--blue); }
-.infobar { height: 46px; display: flex; align-items: center; gap: 28px; padding: 0 28px; background: var(--info); color: #3b4654; font-size: 15.5px; }
+.view-bar { height: 52px; display: flex; align-items: stretch; gap: 24px; padding: 0 28px; background: var(--card); border-bottom: 1px solid var(--line); }
+.infobar { display: flex; align-items: center; gap: clamp(12px, 1.5vw, 24px); min-width: 0; margin-left: auto; color: #3b4654; font-size: 14px; white-space: nowrap; }
 .infobar b { color: var(--ink); font-weight: 700; }
-.infobar-right { margin-left: auto; color: var(--muted); font-size: 14.5px; }
-.view-tabs { height: 52px; display: flex; align-items: stretch; gap: 36px; padding: 0 28px; background: var(--card); border-bottom: 1px solid var(--line); }
+.infobar #source-footer { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.infobar #selection-brief, .infobar-right { flex-shrink: 0; }
+.infobar-right { color: var(--muted); }
+.view-tabs { display: flex; flex-shrink: 0; align-items: stretch; gap: 36px; }
 .view-tabs > button { display: inline-flex; align-items: center; gap: 8px; font-size: 17.5px; font-weight: 700; color: var(--soft); border-bottom: 3px solid transparent; padding-top: 3px; white-space: nowrap; }
 .view-tabs > button:hover { color: var(--muted); }
 .view-tabs > button.active { color: var(--blue); border-bottom-color: var(--blue); }
@@ -79,7 +81,7 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) var(--selection-width) var(--chat-width); gap: 18px; padding: 18px 28px 0; align-items: stretch; }
 .workspace.selection-collapsed { --selection-width: 56px; }
 .workspace.chat-collapsed { --chat-width: 56px; }
-.card { height: calc(100dvh - 232px); min-height: 640px; min-width: 0; display: flex; flex-direction: column; background: var(--card); border: 1px solid #e9ecf0; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.card { height: calc(100dvh - 186px); min-height: 640px; min-width: 0; display: flex; flex-direction: column; background: var(--card); border: 1px solid #e9ecf0; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .main-card { container-type: inline-size; container-name: main-card; }
 .view-content { width: 100%; min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .card-head { display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
@@ -412,9 +414,10 @@ input::placeholder, textarea::placeholder { color: var(--soft); opacity: 1; }
 .toast { position: fixed; left: 50%; bottom: 28px; z-index: 200; transform: translateX(-50%); max-width: calc(100vw - 60px); padding: 12px 20px; border-radius: 12px; color: #fff; background: #1f2937; box-shadow: 0 6px 24px rgb(16 36 64 / 20%); font-size: 15px; line-height: 1.5; text-align: center; }
 
 @media (max-width: 1400px) {
-  .topbar, .infobar, .view-tabs, .app-footer { padding-left: 20px; padding-right: 20px; }
+  .topbar, .view-bar, .app-footer { padding-left: 20px; padding-right: 20px; }
+  .view-tabs { gap: 28px; }
+  .infobar { font-size: 13px; }
   .workspace { gap: 14px; padding-left: 20px; padding-right: 20px; }
-  .infobar-right { display: none; }
   .card-head { padding-left: 16px; padding-right: 16px; }
   .toolbar { padding-left: 16px; padding-right: 16px; }
   .course-table th, .course-table td { padding-left: 7px; padding-right: 7px; }

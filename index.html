@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="국립부경대학교 강의 목록에서 과목을 고르고 시간표 후보를 비교하는 PC용 수강 플래너">
   <title>국립부경대학교 · 수강 플래너</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=27e9ef22">
 </head>
 <body>
   <header class="topbar">
@@ -18,15 +18,17 @@
       <button class="icon-button" id="reload-catalog" aria-label="강의 목록 새로고침" title="강의 목록 새로고침"></button>
     </div>
   </header>
-  <div class="infobar">
-    <span id="source-footer">강의 목록을 확인하고 있어요.</span>
-    <span id="selection-brief">담은 과목 없음</span>
-    <span class="infobar-right">선택과 조건은 이 브라우저에 자동 저장돼요.</span>
+  <div class="view-bar">
+    <nav class="view-tabs" aria-label="작업 화면">
+      <button class="active" id="catalog-tab" aria-controls="catalog-view" aria-pressed="true">과목 선택</button>
+      <button id="timetable-tab" aria-controls="timetable-view" aria-pressed="false">시간표 후보 <span class="tab-count" id="candidate-count">0</span><span class="tab-dot" id="stale-dot" hidden title="조건이 바뀌어 후보를 다시 만들어야 해요"></span></button>
+    </nav>
+    <div class="infobar">
+      <span id="source-footer">강의 목록을 확인하고 있어요.</span>
+      <span id="selection-brief">담은 과목 없음</span>
+      <span class="infobar-right">선택과 조건은 이 브라우저에 자동 저장돼요.</span>
+    </div>
   </div>
-  <nav class="view-tabs" aria-label="작업 화면">
-    <button class="active" id="catalog-tab" aria-controls="catalog-view" aria-pressed="true">과목 선택</button>
-    <button id="timetable-tab" aria-controls="timetable-view" aria-pressed="false">시간표 후보 <span class="tab-count" id="candidate-count">0</span><span class="tab-dot" id="stale-dot" hidden title="조건이 바뀌어 후보를 다시 만들어야 해요"></span></button>
-  </nav>
   <main class="workspace" id="workspace">
     <section class="card main-card" aria-label="과목 목록과 시간표">
       <div id="catalog-view" class="view-content">
