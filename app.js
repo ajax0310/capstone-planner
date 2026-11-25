@@ -343,14 +343,7 @@
     const pages = pageCount(filtered.length);
     state.page = Math.min(Math.max(1, state.page), pages);
     const page = pageCourses();
-    const hidden = hiddenAddedCount();
     $('total-course-count').textContent = state.loading ? '—' : `${filtered.length.toLocaleString()}개`;
-    const from = filtered.length ? (state.pageSize === 'all' ? 1 : (state.page - 1) * state.pageSize + 1) : 0;
-    const to = state.pageSize === 'all' ? filtered.length : Math.min(filtered.length, state.page * state.pageSize);
-    const hiddenNote = hidden ? ` · 담은 과목 ${hidden}개는 숨김` : '';
-    $('catalog-description').textContent = state.loading ? '서버에서 강의 목록을 받고 있어요.'
-      : hasFilters() ? `조건에 맞는 과목 ${filtered.length.toLocaleString()}개 중 ${from}–${to}${hiddenNote}`
-        : `${state.courses.length.toLocaleString()}과목 · ${(state.dataset?.sectionCount || 0).toLocaleString()}분반 중 ${from}–${to}${hiddenNote}`;
     renderCatalogState();
     $('course-rows').innerHTML = page.map(courseRow).join('');
     $('page-indicator').textContent = `${state.page} / ${pages}`;
@@ -1129,7 +1122,6 @@
   $('timetable-tab').addEventListener('click', () => setView('timetable'));
   $('back-to-courses').addEventListener('click', () => setView('catalog'));
   $('reload-catalog').addEventListener('click', () => loadCatalog({ background: true }));
-  $('load-example').addEventListener('click', seedExample);
   $('generate').addEventListener('click', () => generate());
   $('regenerate-inline').addEventListener('click', () => generate());
   $('semester-select').addEventListener('change', event => {
