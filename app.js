@@ -576,9 +576,9 @@
     const days = weekend ? DAYS : DAYS.slice(0, 5);
     const rangeStart = Math.min(9 * 60, ...meetings.map(m => Math.floor(m.start / 60) * 60), ...conditions.blockedTimes.map(m => Math.floor(m.start / 60) * 60));
     const rangeEnd = Math.max(18 * 60, ...meetings.map(m => Math.ceil(m.end / 60) * 60), ...conditions.blockedTimes.map(m => Math.ceil(m.end / 60) * 60));
-    return { details, meetings, weekend, days, rangeStart, rangeEnd };
+    return { details, meetings, days, rangeStart, rangeEnd };
   }
-  const resultSummaryText = candidate => `${candidate.credits}학점 · ${candidate.count}과목${candidate.freeDays?.length ? ` · ${candidate.freeDays.join('·')}요일 공강` : ''} · 수업 사이 대기 ${candidate.gapMinutes}분`;
+  const resultSummaryText = candidate => `${candidate.credits}학점 · ${candidate.count}과목${candidate.freeDays?.length ? ` · ${candidate.freeDays.join('·')}요일 공강` : ''}`;
   function timetableModel() {
     if (!state.candidates.length || state.generating) return null;
     const candidate = state.candidates[state.activeCandidate];
@@ -660,7 +660,7 @@
     state.activeCandidate = Math.min(state.activeCandidate, state.candidates.length - 1);
     const candidate = state.candidates[state.activeCandidate];
     const conditions = state.resultConditions;
-    const { meetings, weekend, days, rangeStart, rangeEnd } = calendarLayout(candidate, conditions);
+    const { meetings, days, rangeStart, rangeEnd } = calendarLayout(candidate, conditions);
     $('result-summary').textContent = resultSummaryText(candidate);
     const hourHeight = 60;
     const height = (rangeEnd - rangeStart) / 60 * hourHeight;
@@ -677,7 +677,6 @@
         return `<button class="calendar-event" data-detail-course="${esc(meeting.course.id)}" data-detail-section="${esc(meeting.section.id)}" data-detail-source="result" style="top:${(meeting.start - rangeStart) / 60 * hourHeight + 2}px;height:${Math.max(24, (meeting.end - meeting.start) / 60 * hourHeight - 4)}px;--event-bg:${color.bg};--event-ink:${color.ink}" title="${esc(`${meeting.course.name} ${meeting.section.number}분반 · ${meeting.section.professor || '교수 미확인'} · ${meeting.day} ${time(meeting.start)}–${time(meeting.end)}`)}"><span class="event-name">${esc(meeting.course.name)}</span><span class="event-time">${time(meeting.start)}–${time(meeting.end)}</span>${meeting.end - meeting.start >= 90 ? `<span class="event-room">${esc(meeting.section.number)}분반${meeting.room ? ` · ${esc(meeting.room)}` : ''}</span>` : ''}</button>`;
       }).join('')}</div>`;
     }).join('')}</div>`;
-    $('calendar-range').textContent = `${weekend ? '월–일' : '월–금'} · ${time(rangeStart)}–${time(rangeEnd)}`;
   }
   async function generateInBrowser({ courses, selection, conditions }) {
     await new Promise(resolve => setTimeout(resolve, 30));
